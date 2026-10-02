@@ -74,7 +74,7 @@ Only the Flight Director can hold, resume, or scrub. Only a *human* Flight Direc
 
 When upper-level winds rise, Weather's data automatically shrinks Guidance's trajectory margin. Both consoles go NO-GO at almost the same moment. Guidance's assessment cites the Weather facts it depends on, even though Guidance's human never sees Weather's full dashboard.
 
-**At work:** a spike in support tickets about a feature should reach the account team before renewal season, without handing them the raw support queue.
+**At work:** a key engineer goes on medical leave, and the project's delivery date slips. The team that talks to the client should hear "the launch moves two weeks" right away. They should never see the medical details behind it.
 
 ### 6. When sources disagree, say so
 

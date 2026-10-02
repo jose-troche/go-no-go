@@ -1,4 +1,4 @@
-I gave 5 AI agents a rocket launch.
+I gave five AI agents a rocket launch.
 
 None of them is allowed to see everything.
 
@@ -26,11 +26,17 @@ What happens when agents stop being personal assistants and start working as a t
 The room makes seven rules impossible to miss:
 
 1️⃣ Every agent has a lane
-2️⃣ Every fact has a receipt (click "Why?")
+
+2️⃣ Every fact has an explanation
+
 3️⃣ Visibility follows your role, not your request
-4️⃣ Only some seats can push the button
-5️⃣ One team's signal is another team's problem
-6️⃣ When sources disagree, say so. Never silently pick.
+
+4️⃣ Only some seats can push the button and make the final decision
+
+5️⃣ One team's signal impacts other teams
+
+6️⃣ When sources disagree, say so. Never silently pick
+
 7️⃣ Rules decide. AI explains.
 
 That last one is the big one. Every GO and NO-GO comes from plain, testable rules. The language model only answers questions and tells the story.
@@ -42,8 +48,11 @@ Swap the rocket for a software release, a loan approval, a hospital discharge, o
 It's real, tested, open code. Open 3 tabs, take 3 consoles, and try to make the public agent leak. 👇
 
 ▶️ Play it live: https://go-no-go.troche.workers.dev
+
 💻 Code + full write-up: github.com/jose-troche/go-no-go
 
 Which console would you take, and who in your org holds the scrub button?
+
+Read the full article below, it is worth it!
 
 #AI #AIAgents #EnterpriseAI #AIGovernance #SoftwareEngineering

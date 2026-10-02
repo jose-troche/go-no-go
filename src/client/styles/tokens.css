@@ -1,0 +1,22 @@
+/* Design tokens (spec 16.1). Mirrors src/shared/tokens.ts. */
+:root {
+  --bg: #0f2742;
+  --panel: #163556;
+  --panel-2: #1b3d62;
+  --line: #dce6ee;
+  --muted: #8fa6bc;
+  --grid: rgba(143, 166, 188, 0.09);
+  --hairline: rgba(220, 230, 238, 0.18);
+  --accent: #ff8a3d;
+  --go: #34c77b;
+  --watch: #f5c542;
+  --nogo: #f0524f;
+  --standby: #6e86a0;
+  --lox: #7cc4ff;
+  --fuel: #e8b04a;
+  --font-body: "Barlow", system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+  --radius: 6px;
+  --gap: 12px;
+  color-scheme: dark;
+}

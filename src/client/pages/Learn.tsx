@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SCENARIO_IDS, SCENARIO_LABELS, TIMESCALES, type ScenarioSetting } from "../../shared/phases";
 import { LIMITS } from "../../shared/protocol";
 import { ApiError, createRoom, joinRoom, loadNick, saveNick, saveToken } from "../api";
@@ -37,7 +37,7 @@ function HeroScene() {
   return <RocketScene phase="FUELING" clock={-600 + (now / 1000) % 60} tags={[]} windKt={10} ceilingFt={7600} fueling={55} dawn showLabels={false} />;
 }
 
-export function Landing() {
+export function Learn() {
   const [nickname, setNickname] = useState(loadNick());
   const [scenario, setScenario] = useState<ScenarioSetting>("SURPRISE");
   const [timescale, setTimescale] = useState(4);
@@ -46,6 +46,9 @@ export function Landing() {
   const [joinNick, setJoinNick] = useState(loadNick());
   const [busy, setBusy] = useState<"create" | "join" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }, []);
 
   async function start(e: React.FormEvent) {
     e.preventDefault();
@@ -85,15 +88,17 @@ export function Landing() {
     <main>
       <section className="landing-hero">
         <div>
-          <div className="brand">
+          <a className="brand" href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}>
             <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4l4 10v10h-8V14z" fill="#DCE6EE" /><path d="M13 25h6l-3 5z" fill="#FF8A3D" /></svg>
             Go/No-Go
-          </div>
+          </a>
           <h1 className="hero-title">Launch control, shared with AI</h1>
           <p className="hero-lede">A launch control room where AI agents and people share a mission, but not every secret.</p>
+          <p><button className="btn primary" onClick={() => navigate("/")}>Open the live demo</button></p>
           <div className="hero-actions">
+            <p className="small muted" style={{ margin: 0 }}>Or run a room with friends: everyone takes a console, and empty consoles stay on autopilot.</p>
             <form className="card" onSubmit={start}>
-              <h2 style={{ fontSize: 22, marginBottom: 10 }}>Start a launch</h2>
+              <h2 style={{ fontSize: 22, marginBottom: 10 }}>Start a multiplayer room</h2>
               <div className="row">
                 <div className="field">
                   <label htmlFor="nick">Your nickname</label>
@@ -116,7 +121,7 @@ export function Landing() {
                 <input type="checkbox" checked={seatFd} onChange={(e) => setSeatFd(e.target.checked)} /> Seat me as Flight Director
               </label>
               <div style={{ marginTop: 12 }}>
-                <button className="btn primary" disabled={busy !== null || !nickname.trim()}>{busy === "create" ? "Opening the control room…" : "Start a launch"}</button>
+                <button className="btn primary" disabled={busy !== null || !nickname.trim()}>{busy === "create" ? "Opening the control room…" : "Create room"}</button>
               </div>
             </form>
             <form className="card" onSubmit={join}>
@@ -157,8 +162,8 @@ export function Landing() {
       </section>
 
       <section className="section">
-        <h2>Concept lens explainers</h2>
-        <p className="muted">Turn on the concept lens inside a room to see these notes appear as things happen.</p>
+        <h2>Concept explainers</h2>
+        <p className="muted">Turn on “Explain this screen” inside a room to see these notes appear as things happen.</p>
         <div className="explainers">
           {EXPLAINERS.map(([id, title, body]) => (
             <article key={id} id={`lens-${id}`} className="card">

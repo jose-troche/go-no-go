@@ -8,16 +8,41 @@ export function useRoomCtx(): RoomHandle {
   return r;
 }
 
+/** True while explain mode is on: concept annotations render inline next to what they explain. */
 export const LensCtx = createContext(false);
 
-/** Concept lens annotation (spec 16.5): only rendered when the lens is on. */
+export interface Guide {
+  explain: boolean;
+  setExplain(v: boolean): void;
+  introOpen: boolean;
+  openIntro(): void;
+  closeIntro(): void;
+  tourOpen: boolean;
+  startTour(): void;
+  endTour(): void;
+}
+
+const noop = () => {};
+export const GuideCtx = createContext<Guide>({
+  explain: false,
+  setExplain: noop,
+  introOpen: false,
+  openIntro: noop,
+  closeIntro: noop,
+  tourOpen: false,
+  startTour: noop,
+  endTour: noop,
+});
+export const useGuide = () => useContext(GuideCtx);
+
+/** Concept annotation (spec 16.5): only rendered in explain mode. */
 export function LensNote({ topic, children }: { topic: string; children: ReactNode }) {
   const on = useContext(LensCtx);
   if (!on) return null;
   return (
     <span className="lens-note" role="note">
       {children}{" "}
-      <a href={`/#lens-${topic}`} target="_blank" rel="noreferrer">
+      <a href={`/learn#lens-${topic}`} target="_blank" rel="noreferrer">
         Learn more
       </a>
     </span>

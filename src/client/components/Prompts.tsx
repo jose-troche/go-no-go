@@ -99,7 +99,7 @@ export function Prompts() {
   const { state } = useRoomCtx();
   if (!state || !state.prompts.length) return null;
   return (
-    <div className="prompt-layer">
+    <div className="prompt-layer" data-explain="prompt">
       {state.prompts.map((p) =>
         p.kind === "poll_confirm" ? (
           <PollConfirm key={`pc${promptId(p)}`} p={p} at={p.at} />

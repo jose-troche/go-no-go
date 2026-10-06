@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { PHASE_LABELS, formatClock } from "../../shared/phases";
+import { PHASE_LABELS, SCENARIO_IDS, SCENARIO_LABELS, formatClock } from "../../shared/phases";
 import { ROLE_NAMES } from "../../shared/roles";
 import { FactRow } from "../components/LedgerTimeline";
 import { WhyChain } from "../components/WhyChain";
@@ -26,6 +26,22 @@ export function AfterAction() {
         </p>
         <LensNote topic="provenance">This report is projected through your permissions. Another console reading the same mission sees a different report.</LensNote>
       </div>
+
+      {state.you.creator && state.phase === "ENDED" && (
+        <section className="card next-card">
+          <div>
+            <h2 style={{ fontSize: 22 }}>Run it again</h2>
+            <p className="small muted" style={{ margin: "4px 0 0" }}>Each scenario shows a different team-agent pattern. Try another one, or switch roles mid-run to compare views.</p>
+          </div>
+          <div className="next-actions">
+            {SCENARIO_IDS.map((s) => (
+              <button key={s} className="btn small" onClick={() => send({ type: "room.reset", scenario: s })}>
+                {SCENARIO_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="panel grid-bg">
         <div className="panel-title">

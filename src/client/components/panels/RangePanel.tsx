@@ -11,7 +11,7 @@ export function RangePanel() {
   const intrusions = t["rso.hazard_intrusions"] as number | undefined;
   const fts = t["rso.fts"] as string | undefined;
   const tracking = t["rso.tracking"] as string | undefined;
-  const canContact = state.you.role === "RSO" && (intrusions ?? 0) > 0;
+  const canContact = state.you.role === "RSO" && state.you.seated && (intrusions ?? 0) > 0;
   return (
     <div className="station-panel">
       <Panel title="Range map" extra={canContact ? <button className="btn primary small" onClick={() => send({ type: "station.action", action: "contact_vessel" })}>Contact vessel</button> : undefined}>

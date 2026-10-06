@@ -3,6 +3,7 @@ import { formatClock } from "../../shared/phases";
 import { STATION_NAMES, type Station } from "../../shared/roles";
 import { LIMITS } from "../../shared/protocol";
 import { StatusLamp } from "./graphics/StatusLamp";
+import { ASK_EXAMPLES } from "../content/guide";
 import { LensNote, useRoomCtx } from "./context";
 
 const label = (s: Station | "SYS") => (s === "SYS" ? "Launch control" : STATION_NAMES[s]);
@@ -19,13 +20,15 @@ export function CommsLoop({ title = "Comms loop", publicMode = false }: { title?
   }, [items.length, answers.length, answers.at(-1)?.text]);
   if (!state) return null;
   const poll = state.poll;
-  const agentName = state.you.role === "PUBLIC" ? "the public affairs agent" : `your ${STATION_NAMES[state.you.role as Station]} agent`;
+  const agentName = state.you.role === "PUBLIC" ? "the public affairs agent" : `the ${STATION_NAMES[state.you.role as Station]} agent`;
+  const asked = new Set(answers.filter((a) => !a.failed).map((a) => a.question));
+  const examples = ASK_EXAMPLES[state.you.role].filter((x) => !asked.has(x.text));
 
   return (
     <section className="panel grid-bg comms" aria-label={title}>
       <h3>{title}</h3>
       {poll && !publicMode && (
-        <div className="card" style={{ padding: 8, marginBottom: 8 }} aria-label="Go/no-go poll">
+        <div className="card" style={{ padding: 8, marginBottom: 8 }} aria-label="Go/no-go poll" data-explain="poll">
           <div className="small muted">Go/no-go poll {poll.state === "open" ? "in progress" : poll.result === "ALL_GO" ? "· all GO" : "· not GO"}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
             {poll.calls.map((c) => (
@@ -51,11 +54,29 @@ export function CommsLoop({ title = "Comms loop", publicMode = false }: { title?
           <div key={a.id} className="qa">
             {a.question && <div className="q">You asked: {a.question}</div>}
             <div>{a.text ?? <span className="muted">Thinking…</span>}</div>
-            {a.text && <div className="small muted">{a.source === "llm" ? "Answered by the LLM from facts visible to you" : "Template answer from facts visible to you"}</div>}
+            {a.text && !a.failed && <div className="small muted">{a.source === "llm" ? "Answered by the AI using only facts your role can see" : "Rule-based answer from facts your role can see (AI budget saved)"}</div>}
           </div>
         ))}
       </div>
+      {examples.length > 0 && (
+        <div className="ask-pills" aria-label="Example questions">
+          <span className="small muted">Try asking:</span>
+          {examples.map((x) => (
+            <button
+              key={x.text}
+              type="button"
+              className={`pill ${x.probe ? "probe" : ""}`}
+              title={x.probe ? "This asks for data outside your current role. See how the answer handles it." : `Ask ${agentName}`}
+              onClick={() => ask(x.text)}
+            >
+              {x.probe && <span aria-hidden="true">🔒 </span>}
+              {x.text}
+            </button>
+          ))}
+        </div>
+      )}
       <form
+        data-explain="ask"
         className="ask-form"
         onSubmit={(e) => {
           e.preventDefault();

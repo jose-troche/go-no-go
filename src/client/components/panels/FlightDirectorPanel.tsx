@@ -39,7 +39,7 @@ export function FlightDirectorPanel() {
   const [tab, setTab] = useState<"overview" | "WX" | "PROP" | "GNC" | "RSO">("overview");
   if (!state) return null;
   const avail = availability(state);
-  const isHuman = state.you.role === "FD";
+  const isHuman = state.you.role === "FD" && state.you.seated;
   const labels: Record<Act, string> = { poll: "Start poll", hold: "Hold", resume: "Resume", recycle: "Recycle", scrub: "Scrub" };
   const pending = state.waivers.filter((w) => w.state === "requested");
   return (
@@ -75,6 +75,7 @@ export function FlightDirectorPanel() {
             <WindowBar windowRemaining={state.windowRemaining} />
             <LensNote topic="window">While the count holds, the clock freezes but the window keeps closing. Long holds lead to scrubs.</LensNote>
           </Panel>
+          <div data-explain="fd-actions" className="panel-slot">
           <Panel title={isHuman ? "Your actions" : "Flight Director actions"}>
             {state.advice && <div className="advice" style={{ marginBottom: 10 }}><b>FD agent advises:</b> {state.advice}</div>}
             <div className="fd-actions">
@@ -87,9 +88,10 @@ export function FlightDirectorPanel() {
                 </div>
               ))}
             </div>
-            {!isHuman && <p className="small muted">The FD agent runs the count. Take the Flight Director console to act.</p>}
+            {!isHuman && <p className="small muted">The FD agent runs the count. Choose “Take control” above to make these calls yourself.</p>}
             <LensNote topic="authority">Only the Flight Director can hold, resume, recycle, or scrub. Anyone else is refused, and the attempt is logged.</LensNote>
           </Panel>
+          </div>
           <Panel title="Waivers and conflicts">
             {!state.waivers.length && !state.conflicts.length && <p className="small muted">None.</p>}
             {state.waivers.map((w) => (

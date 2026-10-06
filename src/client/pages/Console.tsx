@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MissionStrip } from "../components/MissionStrip";
+import { MissionBrief } from "../components/MissionBrief";
 import { StatusBoard } from "../components/StatusBoard";
 import { CommsLoop } from "../components/CommsLoop";
 import { LedgerTimeline } from "../components/LedgerTimeline";
@@ -13,31 +14,34 @@ import { RangePanel } from "../components/panels/RangePanel";
 import { FlightDirectorPanel } from "../components/panels/FlightDirectorPanel";
 import { useRoomCtx } from "../components/context";
 
-export function Console({ lens, setLens }: { lens: boolean; setLens(v: boolean): void }) {
+export function Console() {
   const { state } = useRoomCtx();
   const [tab, setTab] = useState<"comms" | "ledger">("comms");
   if (!state) return null;
   const role = state.you.role;
   return (
     <>
-      <MissionStrip lens={lens} setLens={setLens} />
+      <MissionStrip />
+      <MissionBrief />
       <div className={`console-grid ${tab === "ledger" ? "tab-ledger" : ""}`}>
-        <aside className="area-board"><StatusBoard /></aside>
+        <aside className="area-board" data-explain="status-board"><StatusBoard /></aside>
         <div className="area-main">
-          <div className="scene-wrap"><LiveScene /></div>
-          {role === "WX" && <WeatherPanel />}
-          {role === "PROP" && <PropulsionPanel />}
-          {role === "GNC" && <GuidancePanel />}
-          {role === "RSO" && <RangePanel />}
-          {role === "FD" && <FlightDirectorPanel />}
-          <LccList />
+          <div className="scene-wrap" data-explain="scene"><LiveScene /></div>
+          <div data-explain="station-panel">
+            {role === "WX" && <WeatherPanel />}
+            {role === "PROP" && <PropulsionPanel />}
+            {role === "GNC" && <GuidancePanel />}
+            {role === "RSO" && <RangePanel />}
+            {role === "FD" && <FlightDirectorPanel />}
+          </div>
+          <div data-explain="lcc"><LccList /></div>
         </div>
         <div className="mobile-tabs tabs" role="tablist">
           <button role="tab" aria-selected={tab === "comms"} onClick={() => setTab("comms")}>Comms</button>
           <button role="tab" aria-selected={tab === "ledger"} onClick={() => setTab("ledger")}>Ledger</button>
         </div>
-        <div className="area-comms"><CommsLoop /></div>
-        <div className="area-ledger"><LedgerTimeline /></div>
+        <div className="area-comms" data-explain="comms"><CommsLoop /></div>
+        <div className="area-ledger" data-explain="ledger"><LedgerTimeline /></div>
       </div>
       <Prompts />
     </>

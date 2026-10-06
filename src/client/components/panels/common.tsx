@@ -46,7 +46,7 @@ export function LccList() {
   const [open, setOpen] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   if (!state || !state.lccs.length) return null;
-  const canRequest = state.you.role !== "FD" && state.you.role !== "PUBLIC";
+  const canRequest = state.you.seated && state.you.role !== "FD";
   const fdHuman = state.statuses.FD?.operator === "human";
   return (
     <Panel title="Launch commit criteria">

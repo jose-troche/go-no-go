@@ -29,6 +29,8 @@ export interface Answer {
   text: string | null;
   source?: "llm" | "template";
   factIds: string[];
+  /** The question was refused (rate limit) and never reached the agent. */
+  failed?: boolean;
 }
 export interface Toast {
   id: number;
@@ -47,7 +49,11 @@ export interface ConsoleState extends Omit<FilteredRoomState, "history" | "promp
   aar: { narrative: string; factIds: string[]; source: "llm" | "template" } | null;
 }
 
-type Action = { msg: ServerMsg; at: number } | { local: "ask"; id: string; question: string } | { local: "closeWhy" };
+type Action =
+  | { msg: ServerMsg; at: number }
+  | { local: "ask"; id: string; question: string }
+  | { local: "askFailed"; message: string }
+  | { local: "closeWhy" };
 
 const MAX_FACTS = 500;
 
@@ -55,11 +61,18 @@ function reducer(state: ConsoleState | null, a: Action): ConsoleState | null {
   if ("local" in a) {
     if (!state) return state;
     if (a.local === "ask") return { ...state, answers: [...state.answers, { id: a.id, question: a.question, text: null, factIds: [] }].slice(-12) };
+    if (a.local === "askFailed") {
+      const i = state.answers.findLastIndex((x) => x.text === null);
+      if (i < 0) return state;
+      const answers = [...state.answers];
+      answers[i] = { ...answers[i], text: a.message, failed: true };
+      return { ...state, answers };
+    }
     return { ...state, why: null };
   }
   const { msg, at } = a;
   if (msg.type === "snapshot") {
-    return { ...msg.state, prompts: msg.state.prompts.map((p) => ({ ...p, at })), receivedAt: at, answers: state?.answers ?? [], why: null, aar: state?.aar ?? null };
+    return { ...msg.state, prompts: msg.state.prompts.map((p) => ({ ...p, at })), receivedAt: at, answers: state?.answers ?? [], why: null, aar: null };
   }
   if (!state) return state;
   switch (msg.type) {
@@ -172,7 +185,8 @@ export function useRoom(code: string, token: string): RoomHandle {
       if (msg.type === "tick") telemetry.push(msg.telemetry, at, msg.timescale);
       if (msg.type === "snapshot") telemetry.reset(msg.state.telemetry, at);
       if (msg.type === "error") {
-        toast(msg.message, msg.code === "waiver_needs_human_fd" ? "info" : "error");
+        if (msg.code === "rate_limited") dispatch({ local: "askFailed", message: msg.message });
+        toast(msg.message, msg.code === "waiver_needs_human_fd" || msg.code.startsWith("info_") ? "info" : "error");
         if (msg.code === "room_full") setClosedReason("This control room is full.");
         return;
       }

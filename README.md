@@ -12,7 +12,7 @@ The rocket is the hook. The real subject is **how a team of AI agents should wor
 
 ## The demo moment
 
-Open several browser tabs, take a different console in each, start the countdown, and watch one anomaly ripple across the room. Each role sees a different slice of the same event.
+The home page opens straight into a running mission. Use **View as** to switch between the public view and any console (watching a console grants no authority), or **Take control** to run it yourself. Pick a scenario, watch one anomaly ripple across the room, and see each role get a different slice of the same event. **Invite** shares the room so other people can take the other consoles.
 
 Here is the same moment from scenario S2 (a disagreeing pressure sensor), taken from the headless runner:
 

@@ -30,7 +30,7 @@ A launch countdown has all of that, packed into fifteen minutes, with a clock, a
 
 ## What you'll see in the room
 
-Open the app in a few browser tabs and take a different console in each: Weather in one, Propulsion in another, the public livestream in a third. Start the countdown. When an anomaly hits, watch it ripple across the screens.
+Open the link and a mission is already counting down, with AI agents at every console. A short intro and a one-minute tour show you around, and "Explain this screen" annotates every panel. Use **View as** to flip between the public livestream, Weather, Propulsion, and the other consoles. When an anomaly hits, watch it ripple across the screens. Want people in the room? Send the invite link and let each person take a console.
 
 In one scenario, a pressure sensor starts drifting. Here's the same moment from three seats:
 
@@ -66,7 +66,7 @@ The Flight Director sees everything. Weather sees weather in full detail, and on
 
 ### 4. Not everyone gets to push the button
 
-Only the Flight Director can hold, resume, or scrub. Only a *human* Flight Director can approve an exception to a launch rule. The AI flight director runs the poll and calls holds, but it can't grant waivers.
+Only the Flight Director can hold, resume, or scrub. Only a *human* Flight Director can approve an exception to a launch rule. The AI flight director runs the poll and calls holds, but it can't grant waivers. You can also *watch* any console the agent is running: you see exactly what that role sees, but watching gives you no authority at all.
 
 **At work:** approval rights and change authority. An agent can draft the refund, but a person with the right role approves it above a threshold.
 
@@ -142,7 +142,7 @@ Before you deploy agents that serve more than one person, ask your team (or your
 
 ## Try it, break it, fork it
 
-The best way to understand this is to play it: **go-no-go.troche.workers.dev**. Open three tabs, take three consoles, inject the sensor-disagreement scenario, and watch your screens drift apart. Then open the public view and try to talk the public affairs agent into leaking the pressure readings.
+The best way to understand this is to play it: **go-no-go.troche.workers.dev**. Pick the **Sensor disagreement** scenario, then flip **View as** between Propulsion, Weather, and Public and watch the same moment drift apart. Then stay on the public view and try to talk the public affairs agent into leaking the pressure readings. (There's a one-tap prompt-injection attempt waiting in the question box if you need a head start.)
 
 The code, the full spec, and a headless simulator are on GitHub: **github.com/jose-troche/go-no-go**
 

@@ -674,7 +674,7 @@ type ServerMsg =
 - **Latency.** A human action is reflected on all relevant screens within 500 ms in the same region.
 - **Tick.** Default server tick every 2 real seconds during count phases and ascent; no ticks in `LOBBY`, `SCRUB`, or `ENDED`.
 - **Capacity.** 25 connections per room; 10 concurrent active rooms by default.
-- **Cost guardrails.** Daily LLM call budget and per-room LLM call cap; template fallback when exhausted. Room creation rate limit per client network address (default 3 per hour).
+- **Cost guardrails.** Daily LLM call budget and per-room LLM call cap; template fallback when exhausted. Room creation rate limit per client network address (default 3 per hour), with a separate bucket for landing-page demo rooms (default 12 per hour) so a visitor opening the site in several browsers is not locked out. Both count toward the global active-room cap.
 - **Resilience.** If the server instance restarts mid-room, it rebuilds state from the persisted room config, action log, and ledger, recomputing telemetry deterministically.
 - **Privacy.** Nicknames only; no emails or personal data. Free-text inputs (nicknames, reasons, questions) are length-limited (24, 200, and 280 characters) and stripped of markup. All room data is deleted at expiry.
 - **Abuse.** Rate-limit questions and actions; reject oversized messages; nickname filter for obvious profanity.

@@ -41,10 +41,12 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
     if (!(TIMESCALES as readonly number[]).includes(body.data.timescale)) return fail(400, "bad_timescale", "Unsupported timescale.");
     const ip = req.headers.get("CF-Connecting-IP") ?? "local";
     const registry = env.Registry.getByName("global");
-    const reserved = await registry.reserveRoom(await hashIp(ip, env.SESSION_SECRET));
+    const demo = body.data.demo === true;
+    const reserved = await registry.reserveRoom(await hashIp(ip, env.SESSION_SECRET), demo);
     if (!reserved.ok) {
-      return reserved.error === "busy"
-        ? fail(503, "busy", "The control room is busy, try again in a few minutes.")
+      if (reserved.error === "busy") return fail(503, "busy", "Every control room is in use right now. Try again in a few minutes.");
+      return demo
+        ? fail(429, "rate_limited", "This network has opened many demo rooms in the last hour. Try again in a little while.")
         : fail(429, "rate_limited", "You have created several rooms recently. Try again later, or join an existing room.");
     }
     const sid = newSessionId();

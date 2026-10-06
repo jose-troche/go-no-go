@@ -252,6 +252,7 @@ vite.config.ts
     "TICK_SECONDS": "2",
     "MAX_ACTIVE_ROOMS": "10",
     "ROOM_CREATES_PER_IP_PER_HOUR": "3",
+    "DEMO_CREATES_PER_IP_PER_HOUR": "12",
     "DAILY_LLM_CALLS": "150",
     "ROOM_LLM_CALLS": "6"
   }

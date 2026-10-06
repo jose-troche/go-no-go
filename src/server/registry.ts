@@ -29,11 +29,17 @@ export class Registry extends DurableObject<Env> {
     return row.n;
   }
 
-  async reserveRoom(ipHash: string): Promise<ReserveResult> {
+  /**
+   * Demo rooms (the landing page) have their own per-address bucket, so a visitor who opens the site in a few
+   * browsers does not lose the ability to create a multiplayer room, and vice versa. Both share the global cap.
+   */
+  async reserveRoom(ipHash: string, demo = false): Promise<ReserveResult> {
     const now = Date.now();
     const hour = Math.floor(now / 3_600_000);
-    const used = this.sql.exec<{ count: number }>(`SELECT count FROM ip_creates WHERE ip_hash = ? AND hour = ?`, ipHash, hour).toArray()[0]?.count ?? 0;
-    if (used >= Number(this.env.ROOM_CREATES_PER_IP_PER_HOUR)) return { ok: false, error: "rate_limited" };
+    const bucket = demo ? `demo:${ipHash}` : ipHash;
+    const limit = Number(demo ? this.env.DEMO_CREATES_PER_IP_PER_HOUR : this.env.ROOM_CREATES_PER_IP_PER_HOUR);
+    const used = this.sql.exec<{ count: number }>(`SELECT count FROM ip_creates WHERE ip_hash = ? AND hour = ?`, bucket, hour).toArray()[0]?.count ?? 0;
+    if (used >= limit) return { ok: false, error: "rate_limited" };
     if (this.activeCount(now) >= Number(this.env.MAX_ACTIVE_ROOMS)) return { ok: false, error: "busy" };
     let code = "";
     for (let i = 0; i < 20; i++) {
@@ -45,7 +51,7 @@ export class Registry extends DurableObject<Env> {
     this.sql.exec(`INSERT INTO rooms (code, created_at, last_seen, state) VALUES (?, ?, ?, 'lobby')`, code, now, now);
     this.sql.exec(
       `INSERT INTO ip_creates (ip_hash, hour, count) VALUES (?, ?, 1) ON CONFLICT(ip_hash, hour) DO UPDATE SET count = count + 1`,
-      ipHash,
+      bucket,
       hour,
     );
     this.sql.exec(`INSERT INTO llm_budget (day, used, rooms) VALUES (?, 0, 1) ON CONFLICT(day) DO UPDATE SET rooms = rooms + 1`, this.day(now));

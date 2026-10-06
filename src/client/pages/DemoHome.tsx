@@ -24,7 +24,7 @@ export function DemoHome() {
     creating.current = true;
     setError(null);
     try {
-      const r = await createRoom({ scenario: DEMO_SCENARIO, timescale: 4, nickname: loadNick() || "Visitor" });
+      const r = await createRoom({ scenario: DEMO_SCENARIO, timescale: 4, nickname: loadNick() || "Visitor", demo: true });
       saveDemo(r.code, r.token);
       saveToken(r.code, r.token);
       setSession(loadDemo());

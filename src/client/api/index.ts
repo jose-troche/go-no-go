@@ -18,7 +18,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return data;
 }
 
-export function createRoom(input: { scenario: ScenarioSetting; timescale: number; nickname: string }) {
+export function createRoom(input: { scenario: ScenarioSetting; timescale: number; nickname: string; demo?: boolean }) {
   return post<{ code: string; token: string }>("/api/rooms", input);
 }
 

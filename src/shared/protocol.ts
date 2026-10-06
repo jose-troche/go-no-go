@@ -64,6 +64,8 @@ export const CreateRoomBody = z.object({
   scenario: ScenarioSettingZ,
   timescale: z.number().int(),
   nickname: z.string().min(1).max(80),
+  /** The landing-page demo room: counted against its own, roomier per-address limit. */
+  demo: z.boolean().optional(),
 });
 export const JoinRoomBody = z.object({ nickname: z.string().min(1).max(80) });
 

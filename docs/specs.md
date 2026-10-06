@@ -109,6 +109,9 @@ The room creator additionally holds the **sim director** privilege: starting the
 - **Seats.** One human per console. A human can release a seat or switch to another free seat. A seat is auto-released after 90 real seconds without a heartbeat, and the agent resumes full control.
 - **Capacity.** Up to 5 seated humans and 20 spectators per room. Additional joiners receive a clear "room is full" message.
 - **Solo mode.** The creator may start immediately with every console run by agents, optionally seating themselves as FD.
+- **Demo landing.** The home page opens straight into a solo room the visitor creates (scenario S1, 4x), already counting and watching the Flight Director console. The room is remembered in the browser for its token lifetime and reused on return visits, so revisits do not create rooms; a returning visitor whose mission ended gets a fresh run.
+- **Watching a console.** Any participant may watch a console that no human operates: they receive that role's view while the agent stays in control. Watching grants no authority. When a human takes the console, its watchers return to the public view.
+- **Pause and restart.** The sim director may pause the mission (clock and window both freeze; it resumes on its own after 15 minutes or when the last connection leaves) and restart it in place from T-15:00, optionally with a new scenario or timescale. A restart clears the ledger and action log, keeps seats and watchers, and does not create a new room. The timescale may also change mid-mission; the change is logged at its tick, so replay stays deterministic.
 - **Lifecycle.** `LOBBY` until the creator starts, then the mission phases (section 6), then `ENDED`. Rooms in `LOBBY` with no connections for 30 minutes expire. Rooms in `ENDED` keep their after-action report for 2 hours, then all room data is deleted.
 - **Concurrency limit.** A global cap on active rooms (default 10) protects free-tier budgets. When reached, room creation returns a friendly "control room is busy, try again in a few minutes" message.
 
@@ -368,7 +371,7 @@ A fact is an immutable record. Facts are never edited; a newer fact supersedes a
 
 ### 12.1 Principal resolution
 
-- The principal comes from the authenticated session and the room's seat map on the server. It is never taken from message content, never from the LLM's output, and never from a client-supplied role field.
+- The principal comes from the authenticated session and the room's seat map (and watcher map) on the server. It carries `seated`: true only for the human holding the seat. A watcher's principal has the watched role for visibility and `seated: false`, so every authority check fails for it. It is never taken from message content, never from the LLM's output, and never from a client-supplied role field.
 - A seat change takes effect immediately for every subsequent message.
 
 ### 12.2 Visibility levels
@@ -400,7 +403,8 @@ A fact is an immutable record. Facts are never edited; a newer fact supersedes a
 
 | Action | Who |
 |---|---|
-| Start countdown, inject anomaly | Room creator (sim director) |
+| Start countdown, inject anomaly, pause, restart, change speed | Room creator (sim director) |
+| Watch a console | Any participant, for consoles no other human operates |
 | Claim or release a seat | Any participant, for free seats |
 | Start poll, hold, resume, recycle, scrub | FD (human if seated, otherwise FD agent) |
 | Confirm a poll answer | Seated human of that station |
@@ -501,7 +505,11 @@ The visual language is a **blueprint control room**: deep blueprint navy surface
 
 ### 16.2 Screens
 
-1. **Landing.** The hero is the live rocket scene on the pad at dawn, venting vapor. One line explains the concept ("A launch control room where AI agents and people share a mission, but not every secret"). Actions: "Start a launch", "Join with a code". Below the fold: the concept mapping table from section 1, written for a non-technical audience.
+1. **Landing (live demo).** The home page is the console itself, running scenario S1 (see section 5, demo landing). A header holds the scenario picker (changing it restarts), pause, restart, speed, "Add a problem", help (explain mode, tour, about), report, and invite. Below it, the role bar: "View as" (Public or any console) and "Watch the agent" / "Take control", with a one-line caption of what the current view sees or what the operator may do. A mission brief states what the scenario will do and what to watch for, next to a live line narrating the latest callout and the team-agent idea it illustrates.
+   - **Intro.** On the first visit (and on demand from "About") a five-slide dialog explains the purpose, "same event, different views", the timed mission and its goal, what a person can and cannot change, and the same pattern in other industries. It ends with "Take the 1-minute tour" or "Explore on my own".
+   - **Tour.** A spotlight walkthrough of the main regions (brief, clock, rocket, status board, role bar, hidden counter, instruments, comms, ledger, control mode, help). Each step says what the region is, why it matters, and a workplace equivalent. Steps for regions not on screen are skipped.
+   - While the intro or tour is open, a solo mission pauses so nothing is missed.
+   - **Learn page** (`/learn`): the concept mapping table, the concept explainers, and the forms to start a multiplayer room or join with a code.
 2. **Lobby.** Room code with a copy button, the console map (five seats with occupant nicknames or "Agent"), scenario and timescale (creator can change), and "Start countdown" for the creator.
 3. **Console.** The main experience (16.3).
 4. **Public view.** A livestream-style screen (G7 in 16.4).
@@ -577,16 +585,18 @@ Every graphic binds to role-filtered data only. A graphic for data the viewer ca
 
 `RadialGauge` inputs: value, min, max, nominal band, limit band, unit, label, status, and an optional `restricted` flag that renders the placeholder.
 
-### 16.5 Concept lens
+### 16.5 Explain mode (concept lens)
 
-A toggle in the mission strip. When on, small annotations explain the team-agent concept behind what just happened, for example:
+A toggle in the header ("Explain this screen"). When on, every explained region gets a translucent outline and a "?" badge; hovering or tapping a region shows what it is, why it matters, and a workplace equivalent, and clicking a badge pins it. The UI stays usable underneath, and Esc exits. Explain mode also shows inline annotations that explain the team-agent concept behind what just happened, for example:
 
 - On the hidden counter: "The policy filter removed 6 facts before they reached you."
 - On GNC's NO-GO: "Derived from 2 Weather facts via the upper-winds signal."
 - On a conflict card: "Two sources disagree. The system refuses to guess."
 - On a waiver approval: "Only a human Flight Director can approve this."
 
-Each annotation links to a short explainer on the landing page.
+Each annotation links to a short explainer on the learn page.
+
+The ask box offers example questions as one-tap pills, chosen per role. One pill per role deliberately asks for data outside that role (for the public view, a prompt-injection attempt) so the visitor sees the answer leave it out.
 
 ### 16.6 Motion and accessibility
 
@@ -621,6 +631,9 @@ type ClientMsg =
   | { type: "heartbeat" }
   | { type: "room.start" }                                   // creator only
   | { type: "sim.inject"; scenario: ScenarioId }             // creator only
+  | { type: "room.observe"; station: Station | null }         // watch a console; null returns to the public view
+  | { type: "room.reset"; scenario?: ScenarioSetting; timescale?: number }  // creator only: restart from T-15:00
+  | { type: "room.pause"; paused: boolean }                  // creator only
   | { type: "fd.action"; action: "poll" | "hold" | "resume" | "recycle" | "scrub" }
   | { type: "poll.confirm"; pollId: string }
   | { type: "waiver.request"; lccId: string; reason: string }

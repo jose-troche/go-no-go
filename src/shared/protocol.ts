@@ -35,6 +35,12 @@ export const ClientMsg = z.discriminatedUnion("type", [
     timescale: z.number().int().optional(),
   }),
   z.object({ type: z.literal("sim.inject"), scenario: ScenarioIdZ }),
+  /** Watch a console without operating it: the agent stays in control. null returns to the public view. */
+  z.object({ type: z.literal("room.observe"), station: StationZ.nullable() }),
+  /** Sim director: restart the mission in place from T-15:00, optionally with a new scenario or timescale. */
+  z.object({ type: z.literal("room.reset"), scenario: ScenarioSettingZ.optional(), timescale: z.number().int().optional() }),
+  /** Sim director: freeze or unfreeze the mission (clock and window both stop). */
+  z.object({ type: z.literal("room.pause"), paused: z.boolean() }),
   z.object({ type: z.literal("fd.action"), action: z.enum(["poll", "hold", "resume", "recycle", "scrub"]) }),
   z.object({ type: z.literal("poll.confirm"), pollId: z.string().max(64) }),
   z.object({ type: z.literal("waiver.request"), lccId: z.string().max(32), reason: Reason }),
@@ -126,13 +132,18 @@ export interface PublicRoomState {
   scenario: ScenarioSetting;
   timescale: number;
   creatorNick: string;
+  /** The sim director froze the mission. */
+  paused: boolean;
 }
 
 export interface PrincipalView {
   sid: string;
   nick: string;
+  /** The console whose view this participant receives: their seat, the console they watch, or PUBLIC. */
   role: Role;
   creator: boolean;
+  /** True when operating the console (seated human); false when watching it or spectating. */
+  seated: boolean;
 }
 
 export interface StatusView {

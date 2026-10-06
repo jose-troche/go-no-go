@@ -173,3 +173,54 @@ describe("event projection", () => {
     expect(eventFor(room, room.principal("y"), err)).toBeNull();
   });
 });
+
+describe("watching a console (observe)", () => {
+  it("grants the console's view but none of its authority, and the agent keeps operating", () => {
+    const { room, act, runUntil } = makeRoom("S1");
+    act("s_viewer", "vic", { type: "room.observe", station: "FD" });
+    const p = room.principal("s_viewer");
+    expect(p).toMatchObject({ role: "FD", seated: false });
+    expect(room.humanAt("FD")).toBe(false);
+    act(CREATOR_SID, "director", { type: "room.start" });
+    runUntil((r) => r.clock > -800);
+    const { res, events } = act("s_viewer", "vic", { type: "fd.action", action: "hold" });
+    expect(res.ok).toBe(false);
+    const err = events.find((e) => e.e === "error");
+    expect(err && err.e === "error" && err.message).toMatch(/watching Flight Director/);
+    // Full FD visibility: Weather's raw shear is in the snapshot.
+    expect(buildSnapshot(room, p).telemetry["wx.upper_shear"]).toBeTypeOf("number");
+    // The FD agent still runs the mission on its own.
+    runUntil((r) => r.phase === "HOLD");
+    expect(room.phase).toBe("HOLD");
+  });
+  it("cannot watch a console a person operates, and watchers are bumped when someone takes control", () => {
+    const { room, act } = makeRoom();
+    act("s_a", "ann", { type: "room.observe", station: "WX" });
+    const { events } = act("s_b", "bob", { type: "seat.claim", station: "WX" });
+    expect(room.principal("s_a").role).toBe("PUBLIC");
+    expect(events.some((e) => e.e === "seat" && e.sid === "s_a")).toBe(true);
+    expect(act("s_a", "ann", { type: "room.observe", station: "WX" }).res.ok).toBe(false);
+  });
+  it("switching from operating to watching releases the seat", () => {
+    const { room, act } = makeRoom();
+    act("s_a", "ann", { type: "seat.claim", station: "PROP" });
+    act("s_a", "ann", { type: "room.observe", station: "PROP" });
+    expect(room.humanAt("PROP")).toBe(false);
+    expect(room.principal("s_a")).toMatchObject({ role: "PROP", seated: false });
+    act("s_a", "ann", { type: "room.observe", station: null });
+    expect(room.principal("s_a").role).toBe("PUBLIC");
+  });
+});
+
+describe("speed changes mid-mission", () => {
+  it("applies a new timescale to later ticks but refuses a scenario change", () => {
+    const { room, act, runUntil } = makeRoom();
+    act(CREATOR_SID, "director", { type: "room.start" });
+    runUntil((r) => r.clock > -880);
+    expect(act(CREATOR_SID, "director", { type: "room.configure", timescale: 8 }).res.ok).toBe(true);
+    const before = room.clock;
+    room.tick();
+    expect(room.clock - before).toBe(16);
+    expect(act(CREATOR_SID, "director", { type: "room.configure", scenario: "S2" }).res.ok).toBe(false);
+  });
+});

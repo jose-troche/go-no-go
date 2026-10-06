@@ -44,6 +44,7 @@ export function publicState(room: Room): PublicRoomState {
     scenario: room.config.scenario,
     timescale: room.config.timescale,
     creatorNick: room.config.creatorNick,
+    paused: false,
   };
 }
 
@@ -127,7 +128,7 @@ export function conflictViews(room: Room, p: Principal): ConflictView[] {
     const temp = t["prop.lox_temp"];
     if (typeof temp === "number") view.corroborating = [{ label: "LOX temperature", value: temp, unit: "K", nominal: temp <= 90 }];
     if (c.state === "open") {
-      const isHumanProp = p.role === "PROP";
+      const isHumanProp = p.role === "PROP" && p.seated;
       view.options = [
         {
           choice: "recalibrate_b",
@@ -172,6 +173,7 @@ export function promptsFor(room: Room, p: Principal): PromptView[] {
       out.push({ kind: "poll_confirm", data: { pollId: poll.id, station: call.station, deadlineMs: seconds * 1000, seconds } });
     }
   }
+  if (!p.seated) return out;
   if (p.role === "PROP") for (const c of conflictViews(room, p)) if (c.state === "open") out.push({ kind: "conflict", data: c });
   if (p.role === "FD") for (const w of waiverViews(room, p)) if (w.state === "requested") out.push({ kind: "waiver_decision", data: w });
   return out;

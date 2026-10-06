@@ -2,7 +2,9 @@
 // A thin I/O shell around the deterministic Room runtime. Every role-sensitive message goes through the policy filter.
 import { Agent, type Connection, type ConnectionContext, type WSMessage } from "agents";
 import { ClientMsg, LIMITS, MAX_MESSAGE_BYTES, cleanText, type PublicRoomState, type ServerMsg } from "../../shared/protocol";
-import type { ScenarioSetting } from "../../shared/phases";
+import { TIMESCALES, type ScenarioSetting } from "../../shared/phases";
+import { STATIONS } from "../../shared/roles";
+import { checkAuthority } from "../policy/authority";
 import { verifyToken } from "../auth";
 import { factToRow, Ledger, rowToFact } from "../ledger/ledger";
 import { SCHEMA, type FactRow } from "../ledger/schema";
@@ -24,16 +26,20 @@ const ENDED_EXPIRY_S = 2 * 60 * 60;
 const ACTIONS_PER_WINDOW = 30;
 const ACTION_WINDOW_MS = 10_000;
 const MAX_CATCHUP_TICKS = 5;
+/** A paused mission resumes on its own after this long, so an abandoned tab cannot hold a room slot frozen. */
+const MAX_PAUSE_S = 15 * 60;
 
 function log(event: string, data: Record<string, unknown> = {}) {
   console.log(JSON.stringify({ event, ...data }));
 }
 
 export class LaunchRoom extends Agent<Env, PublicRoomState> {
-  override initialState: PublicRoomState = { code: "", phase: "LOBBY", seats: {}, spectators: 0, scenario: "S0", timescale: 4, creatorNick: "" };
+  override initialState: PublicRoomState = { code: "", phase: "LOBBY", seats: {}, spectators: 0, scenario: "S0", timescale: 4, creatorNick: "", paused: false };
 
   private room: Room | null = null;
   private startedAt: number | null = null;
+  /** Wall-clock time the sim director paused at; ticks are anchored to startedAt, which shifts forward on resume. */
+  private pausedAt: number | null = null;
   private lastSeen = new Map<string, number>();
   private limiter = new SessionLimiter();
   private actionCounts = new Map<string, { start: number; n: number }>();
@@ -50,9 +56,10 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
     if (!cfg.has("config")) return;
     const config = JSON.parse(cfg.get("config")!) as RoomConfig;
     this.startedAt = cfg.has("startedAt") ? Number(cfg.get("startedAt")) : null;
+    this.pausedAt = cfg.has("pausedAt") ? Number(cfg.get("pausedAt")) : null;
     this.llmCalls = Number(cfg.get("llmCalls") ?? 0);
     this.rebuild(config);
-    if (this.room?.running) await this.ensureTicking();
+    if (this.room?.running && this.pausedAt === null) await this.ensureTicking();
   }
 
   /** Rebuilds the room from config, action log, and ledger (spec 18 resilience). */
@@ -86,7 +93,7 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
   /** Ticks are anchored to wall-clock time since start, so a restart can replay to the same tick without per-tick writes. */
   private targetTick(): number {
     if (this.startedAt === null) return 0;
-    return Math.round((Date.now() - this.startedAt) / this.tickMs());
+    return Math.round(((this.pausedAt ?? Date.now()) - this.startedAt) / this.tickMs());
   }
 
   private persistFact(f: ReturnType<Ledger["append"]>) {
@@ -188,6 +195,8 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
       if (seat) this.logAndApply("system", "", { type: "seat.timeout", station: seat });
     }
     this.syncPublic(conn.id);
+    const others = [...this.getConnections()].filter((c) => c.id !== conn.id).length;
+    if (!others && this.pausedAt !== null) await this.setPaused(false);
     if (this.room.phase === "LOBBY" && this.connectionCount() <= 1) await this.schedule(LOBBY_EXPIRY_S, "lobbyExpiry");
   }
 
@@ -218,6 +227,19 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
         return this.send(conn, p, { type: "why.result", factId: msg.factId, chain: this.room.ledger.whyChain(p, msg.factId) });
       case "aar.request":
         return this.handleAar(conn, p);
+      case "room.reset":
+      case "room.pause": {
+        const denied = checkAuthority(p, msg, { phase: this.room.phase, seats: this.room.seats });
+        if (denied) return this.send(conn, p, { type: "error", code: "forbidden", message: denied });
+        if (msg.type === "room.pause") {
+          if (!this.room.running) return this.send(conn, p, { type: "error", code: "bad_phase", message: "Nothing is running to pause." });
+          return this.setPaused(msg.paused);
+        }
+        if (msg.timescale !== undefined && !(TIMESCALES as readonly number[]).includes(msg.timescale)) {
+          return this.send(conn, p, { type: "error", code: "bad_timescale", message: "Unsupported timescale." });
+        }
+        return this.resetRoom(msg.scenario, msg.timescale);
+      }
       default: {
         const wasLobby = this.room.phase === "LOBBY";
         this.logAndApply(i.sid, i.nick, msg);
@@ -239,12 +261,84 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
 
   /** Persists to the ordered action log, applies to the deterministic room, then fans out. */
   private logAndApply(sid: string, nick: string, msg: LoggedAction["msg"]) {
+    this.logApply(sid, nick, msg);
+    this.flush();
+  }
+
+  private logApply(sid: string, nick: string, msg: LoggedAction["msg"]) {
     const room = this.room!;
     const entry: LoggedAction = { tick: room.ticks, sid, nick, msg };
     this.sql`INSERT INTO action_log (sim_time, actor, action) VALUES (${room.abs}, ${sid}, ${JSON.stringify(entry)})`;
     const res = room.apply(entry);
     if (!res.ok && msg.type !== "seat.timeout") log("action.denied", { code: room.config.code, type: msg.type });
-    this.flush();
+  }
+
+  // ---------- Sim director: pause and restart ----------
+
+  private async setPaused(paused: boolean) {
+    if (paused && this.pausedAt === null) {
+      this.pausedAt = Date.now();
+      this.setConfig("pausedAt", String(this.pausedAt));
+      await this.stopTicking();
+      await this.schedule(MAX_PAUSE_S, "pauseExpiry");
+    } else if (!paused && this.pausedAt !== null) {
+      if (this.startedAt !== null) {
+        this.startedAt += Date.now() - this.pausedAt;
+        this.setConfig("startedAt", String(this.startedAt));
+      }
+      this.pausedAt = null;
+      this.sql`DELETE FROM room_config WHERE k = 'pausedAt'`;
+      for (const s of this.getSchedules().filter((x) => x.callback === "pauseExpiry")) await this.cancelSchedule(s.id);
+      if (this.room?.running) await this.ensureTicking();
+    }
+    this.syncPublic();
+  }
+
+  async pauseExpiry() {
+    await this.setPaused(false);
+  }
+
+  /**
+   * Restarts the mission in place from T-15:00 (new seed, empty ledger and action log), keeping
+   * everyone's seat or watched console. Lets a visitor switch scenarios without creating rooms.
+   */
+  private async resetRoom(scenario?: ScenarioSetting, timescale?: number) {
+    const old = this.room!;
+    await this.stopTicking();
+    for (const s of this.getSchedules().filter((x) => x.callback !== "tick")) await this.cancelSchedule(s.id);
+    this.sql`DELETE FROM facts`;
+    this.sql`DELETE FROM action_log`;
+    this.sql`DELETE FROM room_config WHERE k IN ('startedAt', 'pausedAt')`;
+    this.startedAt = null;
+    this.pausedAt = null;
+    this.aarCache.clear();
+    const createdAt = Date.now();
+    const config: RoomConfig = {
+      ...old.config,
+      scenario: scenario ?? old.config.scenario,
+      timescale: timescale ?? old.config.timescale,
+      seed: Room.seedFor(old.config.code, createdAt),
+      createdAt,
+    };
+    this.setConfig("config", JSON.stringify(config));
+    this.room = new Room(config, new Ledger((f) => this.persistFact(f)));
+    const nick = (sid: string) => old.nicks.get(sid) ?? "guest";
+    for (const st of STATIONS) {
+      const sid = old.seats[st];
+      if (sid) this.logApply(sid, nick(sid), { type: "seat.claim", station: st });
+    }
+    for (const [sid, st] of old.observers) this.logApply(sid, nick(sid), { type: "room.observe", station: st });
+    this.logApply(config.creatorSid, config.creatorNick, { type: "room.start" });
+    this.room.drain();
+    log("room.reset", { code: this.name, scenario: config.scenario, timescale: config.timescale });
+    await this.onMissionStart();
+    for (const conn of this.getConnections()) {
+      const p = this.principalOf(conn);
+      if (!p) continue;
+      this.send(conn, p, { type: "welcome", you: principalView(p), room: this.publicView() });
+      this.send(conn, p, { type: "snapshot", state: buildSnapshot(this.room, p) });
+    }
+    this.syncPublic();
   }
 
   private async onMissionStart() {
@@ -269,7 +363,7 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
 
   async tick() {
     const room = this.room;
-    if (!room || !room.running) return this.stopTicking();
+    if (!room || !room.running || this.pausedAt !== null) return this.stopTicking();
     const target = Math.max(this.targetTick(), room.ticks + 1);
     let n = 0;
     while (room.running && room.ticks < target && n++ < MAX_CATCHUP_TICKS) room.tick();
@@ -315,9 +409,9 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
       const i = this.info(c);
       if (!i || seen.has(i.sid)) continue;
       seen.add(i.sid);
-      if (this.room!.seatOf(i.sid) === null) spectators++;
+      if (this.room!.seatOf(i.sid) === null && !this.room!.observers.has(i.sid)) spectators++;
     }
-    return { ...pub, spectators };
+    return { ...pub, spectators, paused: this.pausedAt !== null };
   }
 
   /** Agent state is synced to EVERY client: only PublicRoomState goes here (D3). Written only on change (D4). */
@@ -327,7 +421,7 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
     if (excludeConnId) {
       const c = [...this.getConnections()].find((x) => x.id === excludeConnId);
       const i = c && this.info(c);
-      if (i && this.room.seatOf(i.sid) === null && ![...this.getConnections()].some((x) => x.id !== excludeConnId && this.info(x)?.sid === i.sid)) {
+      if (i && this.room.seatOf(i.sid) === null && !this.room.observers.has(i.sid) && ![...this.getConnections()].some((x) => x.id !== excludeConnId && this.info(x)?.sid === i.sid)) {
         next.spectators = Math.max(0, next.spectators - 1);
       }
     }

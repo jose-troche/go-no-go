@@ -18,7 +18,7 @@ describe("visibility matrix (spec 12.3)", () => {
   it.each(domainRows)("%s observations: FD and owner FULL, other stations SUMMARY, public NONE", (domain, owner) => {
     const v = defaultVisibility("observation", domain, owner, `sensor:${domain}.x`);
     for (const r of [...STATIONS, "PUBLIC"] as Role[]) {
-      const lvl = levelForVisibility({ sid: "x", nick: "x", role: r, creator: false }, v);
+      const lvl = levelForVisibility({ sid: "x", nick: "x", role: r, creator: false, seated: false }, v);
       expect(lvl).toBe(r === "FD" || r === owner ? "FULL" : r === "PUBLIC" ? "NONE" : "SUMMARY");
     }
   });
@@ -40,8 +40,8 @@ describe("visibility matrix (spec 12.3)", () => {
   });
   it("sim director events are creator-only", () => {
     const v = { full: ["DIRECTOR" as const], summary: [] };
-    expect(levelForVisibility({ sid: "a", nick: "a", role: "FD", creator: false }, v)).toBe("NONE");
-    expect(levelForVisibility({ sid: "a", nick: "a", role: "PUBLIC", creator: true }, v)).toBe("FULL");
+    expect(levelForVisibility({ sid: "a", nick: "a", role: "FD", creator: false, seated: false }, v)).toBe("NONE");
+    expect(levelForVisibility({ sid: "a", nick: "a", role: "PUBLIC", creator: true, seated: false }, v)).toBe("FULL");
   });
   it("derived visibility is the per-role minimum of parents", () => {
     const a = defaultVisibility("observation", "wx", "WX", "sensor:wx.upper_shear");

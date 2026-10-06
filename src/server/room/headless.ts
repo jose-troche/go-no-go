@@ -28,7 +28,7 @@ export interface HeadlessResult {
 export const CREATOR_SID = "s_creator";
 
 export function viewer(role: Role, creator = false): Principal {
-  return { sid: `viewer_${role}`, nick: `viewer-${role}`, role, creator };
+  return { sid: `viewer_${role}`, nick: `viewer-${role}`, role, creator, seated: role !== "PUBLIC" };
 }
 
 export function runHeadless(opts: HeadlessOptions): HeadlessResult {

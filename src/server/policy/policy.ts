@@ -17,6 +17,8 @@ export interface Principal {
   nick: string;
   role: Role;
   creator: boolean;
+  /** True only for the human holding the seat. Observers get the role's view but none of its authority. */
+  seated: boolean;
 }
 
 export type Level = "FULL" | "SUMMARY" | "NONE";
@@ -96,13 +98,20 @@ function clone(v: Visibility): Visibility {
 
 // ---------- Principals ----------
 
-export function principalOf(seats: Partial<Record<Station, string>>, creatorSid: string, sid: string, nick: string): Principal {
+/** Resolves the principal from the server's seat and observer maps; never from anything the client sends. */
+export function principalOf(
+  seats: Partial<Record<Station, string>>,
+  creatorSid: string,
+  sid: string,
+  nick: string,
+  observing: Station | null = null,
+): Principal {
   const seat = STATIONS.find((s) => seats[s] === sid);
-  return { sid, nick, role: seat ?? "PUBLIC", creator: sid === creatorSid };
+  return { sid, nick, role: seat ?? observing ?? "PUBLIC", creator: sid === creatorSid, seated: seat !== undefined };
 }
 
 export function principalView(p: Principal): PrincipalView {
-  return { sid: p.sid, nick: p.nick, role: p.role, creator: p.creator };
+  return { sid: p.sid, nick: p.nick, role: p.role, creator: p.creator, seated: p.seated };
 }
 
 // ---------- Facts ----------

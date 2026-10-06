@@ -153,6 +153,8 @@ export class Room {
   anomalies: Partial<Record<ScenarioId, ActiveAnomaly>> = {};
 
   seats: Partial<Record<Station, string>> = {};
+  /** Participants watching a console without operating it (sid -> station). Never grants authority. */
+  observers = new Map<string, Station>();
   nicks = new Map<string, string>();
 
   telemetry: Telemetry = {};
@@ -213,7 +215,7 @@ export class Room {
   }
 
   principal(sid: string): Principal {
-    return principalOf(this.seats, this.config.creatorSid, sid, this.nicks.get(sid) ?? "guest");
+    return principalOf(this.seats, this.config.creatorSid, sid, this.nicks.get(sid) ?? "guest", this.observers.get(sid) ?? null);
   }
 
   seatOf(sid: string): Station | null {
@@ -383,6 +385,16 @@ export class Room {
         if (holder === sid) return { ok: true };
         const old = this.seatOf(sid);
         if (old) this.releaseSeat(old, false);
+        this.observers.delete(sid);
+        // A console operated by a person is no longer open to watchers; they return to the public view.
+        for (const [osid, st] of this.observers) {
+          if (st !== msg.station) continue;
+          this.observers.delete(osid);
+          this.outbox.push(
+            { e: "seat", sid: osid },
+            { e: "error", sid: osid, code: "info_bumped", message: `${p.nick} took control of ${STATION_NAMES[msg.station]}. You are back on the public view.` },
+          );
+        }
         this.seats[msg.station] = sid;
         const f = this.fact({
           kind: "event",
@@ -408,8 +420,23 @@ export class Room {
       }
       case "heartbeat":
         return { ok: true };
+      case "room.observe": {
+        const st = msg.station;
+        if (st && this.seats[st] && this.seats[st] !== sid) return err("seat_taken", `${this.nicks.get(this.seats[st]!) ?? "Someone"} is operating that console. Pick another one.`);
+        const seat = this.seatOf(sid);
+        if (seat) this.releaseSeat(seat, false);
+        if (st) this.observers.set(sid, st);
+        else this.observers.delete(sid);
+        this.outbox.push({ e: "seat", sid });
+        return { ok: true };
+      }
+      // Restart and pause are wall-clock concerns handled by the LaunchRoom shell; they never reach the action log.
+      case "room.reset":
+      case "room.pause":
+        return { ok: true };
       case "room.configure": {
-        if (this.phase !== "LOBBY") return err("bad_phase", "The scenario can only be changed in the lobby.");
+        // Speed may change mid-mission (it is logged at its tick, so replay stays deterministic); the scenario may not.
+        if (msg.scenario && this.phase !== "LOBBY") return err("bad_phase", "The scenario can only be changed in the lobby. Restart to switch scenarios.");
         if (msg.scenario) this.config.scenario = msg.scenario;
         if (msg.timescale !== undefined) {
           if (!(TIMESCALES as readonly number[]).includes(msg.timescale)) return err("bad_timescale", "Unsupported timescale.");

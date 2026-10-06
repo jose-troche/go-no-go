@@ -28,6 +28,8 @@ const ACTION_WINDOW_MS = 10_000;
 const MAX_CATCHUP_TICKS = 5;
 /** A paused mission resumes on its own after this long, so an abandoned tab cannot hold a room slot frozen. */
 const MAX_PAUSE_S = 15 * 60;
+/** A demo room nobody is connected to is ended after this grace period (long enough to survive a reload). */
+const DEMO_IDLE_S = 90;
 
 function log(event: string, data: Record<string, unknown> = {}) {
   console.log(JSON.stringify({ event, ...data }));
@@ -108,7 +110,7 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
 
   // ---------- RPC from the Worker ----------
 
-  async initRoom(input: { code: string; scenario: ScenarioSetting; timescale: number; creatorSid: string; creatorNick: string }): Promise<boolean> {
+  async initRoom(input: { code: string; scenario: ScenarioSetting; timescale: number; creatorSid: string; creatorNick: string; demo?: boolean }): Promise<boolean> {
     if (this.room) return false;
     const createdAt = Date.now();
     const config: RoomConfig = {
@@ -120,6 +122,7 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
       createdAt,
       creatorSid: input.creatorSid,
       creatorNick: input.creatorNick,
+      demo: input.demo === true,
     };
     this.setConfig("config", JSON.stringify(config));
     const ledger = new Ledger((f) => this.persistFact(f));
@@ -196,6 +199,11 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
     }
     this.syncPublic(conn.id);
     const others = [...this.getConnections()].filter((c) => c.id !== conn.id).length;
+    if (!others && this.room.config.demo) {
+      // Free the room slot soon after a demo visitor leaves, instead of running the mission out for nobody.
+      for (const s of this.getSchedules().filter((x) => x.callback === "demoIdle")) await this.cancelSchedule(s.id);
+      await this.schedule(DEMO_IDLE_S, "demoIdle");
+    }
     if (!others && this.pausedAt !== null) await this.setPaused(false);
     if (this.room.phase === "LOBBY" && this.connectionCount() <= 1) await this.schedule(LOBBY_EXPIRY_S, "lobbyExpiry");
   }
@@ -377,6 +385,12 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
       if (p) this.send(conn, p, buildTick(room, p));
     }
     if (!room.running) await this.stopTicking();
+  }
+
+  async demoIdle() {
+    if (!this.room?.config.demo || this.connectionCount() > 0) return;
+    log("room.idle", { code: this.name, phase: this.room.phase });
+    await this.cleanup();
   }
 
   async lobbyExpiry() {

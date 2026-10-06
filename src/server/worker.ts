@@ -51,7 +51,7 @@ async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
     }
     const sid = newSessionId();
     const room = await getAgentByName(env.LaunchRoom, reserved.code);
-    await room.initRoom({ code: reserved.code, scenario: body.data.scenario, timescale: body.data.timescale, creatorSid: sid, creatorNick: nickname });
+    await room.initRoom({ code: reserved.code, scenario: body.data.scenario, timescale: body.data.timescale, creatorSid: sid, creatorNick: nickname, demo });
     const token = await mintToken(env.SESSION_SECRET, reserved.code, sid, nickname);
     return json({ code: reserved.code, token });
   }

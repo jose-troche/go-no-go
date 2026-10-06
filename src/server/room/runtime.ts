@@ -50,6 +50,8 @@ export interface RoomConfig {
   createdAt: number;
   creatorSid: string;
   creatorNick: string;
+  /** Landing-page demo room: ended as soon as nobody has been connected for a short grace period. */
+  demo?: boolean;
 }
 
 export type SystemMsg = { type: "seat.timeout"; station: Station };

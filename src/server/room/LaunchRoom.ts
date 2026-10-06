@@ -8,9 +8,9 @@ import { checkAuthority } from "../policy/authority";
 import { verifyToken } from "../auth";
 import { factToRow, Ledger, rowToFact } from "../ledger/ledger";
 import { SCHEMA, type FactRow } from "../ledger/schema";
-import { factsForPrompt, hiddenCount, leaks, type Principal } from "../policy/policy";
+import { leaks, type Principal } from "../policy/policy";
 import { createProvider } from "../llm/provider";
-import { ANSWER_MAX_TOKENS, NARRATIVE_MAX_TOKENS, filterCitations, narrativeSystem, narrativeUser, questionSystem, questionUser } from "../llm/prompts";
+import { aarPrompt, askPrompt, filterCitations } from "../llm/prompts";
 import { SessionLimiter } from "../llm/budget";
 import { Room, type LoggedAction, type RoomConfig } from "./runtime";
 import { buildSnapshot, buildTick, eventFor, publicState, templateAnswer } from "./egress";
@@ -515,16 +515,12 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
     const question = cleanText(rawText, LIMITS.question);
     if (!question) return;
 
-    const facts = factsForPrompt(p, room.ledger, { text: question, limit: 20 });
-    const hidden = hiddenCount(p, room.ledger) > 0;
+    const prompt = askPrompt(p, room.ledger, room, question);
+    const { facts, hidden } = prompt;
     const provider = createProvider(this.env);
     if (provider && (await this.llmAllowed())) {
       try {
-        const out = await provider.complete({
-          system: questionSystem(p.role),
-          user: questionUser(p.role, room.clock, room.phase, facts, hidden, question),
-          maxTokens: ANSWER_MAX_TOKENS,
-        });
+        const out = await provider.complete({ system: prompt.system, user: prompt.user, maxTokens: prompt.maxTokens });
         const { text, factIds } = filterCitations(out, new Set(facts.map((f) => f.id)));
         log("llm.call", { code: this.name, kind: "ask", provider: provider.name });
         return reply({ type: "answer", questionId, text, factIds, source: "llm" });
@@ -544,15 +540,14 @@ export class LaunchRoom extends Agent<Env, PublicRoomState> {
     const key = `${p.role}:${p.creator}`;
     const cached = this.aarCache.get(key);
     if (cached && !room.running) return this.send(conn, p, { type: "aar", ...cached });
-    const facts = factsForPrompt(p, room.ledger, { text: "decision hold scrub poll liftoff conflict waiver status phase", limit: 40 })
-      .sort((a, b) => a.id.localeCompare(b.id));
-    const hidden = hiddenCount(p, room.ledger) > 0;
     const outcome = room.ledger.all().some((f) => f.attribute === "end") ? "nominal ascent" : room.ledger.all().some((f) => (f.value as { to?: string })?.to === "SCRUB") ? "scrubbed" : room.phase;
+    const prompt = aarPrompt(p, room.ledger, outcome);
+    const { facts, hidden } = prompt;
     let result: { narrative: string; factIds: string[]; source: "llm" | "template" } | null = null;
     const provider = createProvider(this.env);
     if (!room.running && provider && (await this.llmAllowed())) {
       try {
-        const out = await provider.complete({ system: narrativeSystem(p.role), user: narrativeUser(p.role, outcome, facts, hidden), maxTokens: NARRATIVE_MAX_TOKENS });
+        const out = await provider.complete({ system: prompt.system, user: prompt.user, maxTokens: prompt.maxTokens });
         const f = filterCitations(out, new Set(facts.map((x) => x.id)));
         result = { narrative: f.text, factIds: f.factIds, source: "llm" };
         log("llm.call", { code: this.name, kind: "aar", provider: provider.name });

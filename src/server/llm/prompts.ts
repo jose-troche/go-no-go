@@ -2,6 +2,7 @@
 import { formatClock, PHASE_LABELS, type Phase } from "../../shared/phases";
 import { ROLE_NAMES, type Role } from "../../shared/roles";
 import type { FactProjection } from "../../shared/protocol";
+import { factsForPrompt, hiddenCount, type LedgerView, type Principal } from "../policy/policy";
 
 export const ANSWER_MAX_TOKENS = 150;
 export const NARRATIVE_MAX_TOKENS = 320;
@@ -48,6 +49,31 @@ export function narrativeSystem(role: Role): string {
 
 export function narrativeUser(role: Role, outcome: string, facts: FactProjection[], hidden: boolean): string {
   return [`View: ${consoleName(role)}. Outcome: ${outcome}.`, `Facts (JSON): ${JSON.stringify(facts.map(compact))}`, `Hidden facts exist: ${hidden}`].join("\n");
+}
+
+export interface BuiltPrompt {
+  system: string;
+  user: string;
+  maxTokens: number;
+  /** The projected facts the prompt carries; the only ids an answer may cite. */
+  facts: FactProjection[];
+  hidden: boolean;
+}
+
+/** The complete ask prompt for a principal. Pure, so the leak tests drive exactly what the room sends. */
+export function askPrompt(p: Principal, ledger: LedgerView, ctx: { clock: number; phase: Phase }, question: string): BuiltPrompt {
+  const facts = factsForPrompt(p, ledger, { text: question, limit: 20 });
+  const hidden = hiddenCount(p, ledger) > 0;
+  return { system: questionSystem(p.role), user: questionUser(p.role, ctx.clock, ctx.phase, facts, hidden, question), maxTokens: ANSWER_MAX_TOKENS, facts, hidden };
+}
+
+/** The complete after-action prompt for a principal. */
+export function aarPrompt(p: Principal, ledger: LedgerView, outcome: string): BuiltPrompt {
+  const facts = factsForPrompt(p, ledger, { text: "decision hold scrub poll liftoff conflict waiver status phase", limit: 40 }).sort((a, b) =>
+    a.id.localeCompare(b.id),
+  );
+  const hidden = hiddenCount(p, ledger) > 0;
+  return { system: narrativeSystem(p.role), user: narrativeUser(p.role, outcome, facts, hidden), maxTokens: NARRATIVE_MAX_TOKENS, facts, hidden };
 }
 
 /** Removes citations of fact ids that were not provided (guide 7.8). */
